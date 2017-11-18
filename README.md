@@ -1,4 +1,4 @@
 # scratch
-anything and nothing at all
+_(Anything but Nothing at all)_
 
 &rArr; Here is of no interest.
