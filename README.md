@@ -21,14 +21,14 @@ There's a package manager. _Nothing is simple anymore._ Of course, there are ben
 
 #### Idea
 1. Development environment on Xubuntu 16.04
-1.1 virtualenv without committing 3rd party stuff to git.
-1.2 Editor: let's try [Atom](https://atom.io/).
+  1. virtualenv without committing 3rd party stuff to git.
+  2. Editor: let's try [Atom](https://atom.io/).
 2. Code
-2.1 Use some fancy library and print a fancy "Hello World"
+  1. Use some fancy library and print a fancy "Hello World"
 3. Ship
-3.1 Build a docker image from some Python alpine base from docker-hub with the library and my script.
+  1. Build a docker image from some Python alpine base from docker-hub with the library and my script.
 4. Run
-4.1 docker run.
+  1. docker run.
 
 ##### virtualenv
 `$ virtualenv --python python3 scratch-venv`
@@ -58,7 +58,7 @@ OK. [So](https://mathieu.daitauha.fr/blog/2016/07/06/pip-install-pygobject/):
 `$ pip install git+https://git.gnome.org/browse/pygobject`
 >Command "/home/florian/dev/scratch/scratch-venv/bin/python3 -u -c "import setuptools, tokenize;\__file\__='/tmp/pip-t2bhn81u-build/setup.py';f=getattr(tokenize, 'open', open)( \__file\__);code=f.read().replace('\r\n', '\n');f.close();exec(compile(code, \__file\__, 'exec'))" install \--record /tmp/pip-6gn75fel-record/install-record.txt \--single-version-externally-managed \--compile \--install-headers /home/florian/dev/scratch/scratch-venv/include/site/python3.5/pygobject" failed with error code 1 in /tmp/pip-t2bhn81u-build/
 
-This is not even funny anymore. Perhaps Python is a mess after all.
+This is not even funny anymore. Maybe Python was a mistake after all.
 
 Let's try [Toga](https://pybee.org/project/projects/libraries/toga/)!
 `$ pip install Toga`
