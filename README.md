@@ -21,14 +21,14 @@ There's a package manager. _Nothing is simple anymore._ Of course, there are ben
 
 #### Idea
 1. Development environment on Xubuntu 16.04
-  1. virtualenv without committing 3rd party stuff to git.
-  2. Editor: let's try [Atom](https://atom.io/).
+    1. virtualenv without committing 3rd party stuff to git.
+    2. Editor: let's try [Atom](https://atom.io/).
 2. Code
-  1. Use some fancy library and print a fancy "Hello World"
+    1. Use some fancy library and print a fancy "Hello World"
 3. Ship
-  1. Build a docker image from some Python alpine base from docker-hub with the library and my script.
+    1. Build a docker image from some Python alpine base from docker-hub with the library and my script.
 4. Run
-  1. docker run.
+    1. docker run.
 
 ##### virtualenv
 `$ virtualenv --python python3 scratch-venv`
