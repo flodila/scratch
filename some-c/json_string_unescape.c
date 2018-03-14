@@ -15,39 +15,90 @@
  *  See the License for the specific language governing permissions and
  *  limitations under the License.
  */
-
 #include<stdio.h>
 #include<string.h>
 #include<stdlib.h>
 
-typedef enum { txt, escaped, unicode } unescape_json_string_state;
+typedef enum {
+    txt,       // normal text (initial state)
+    escaped,   // just after a reverse solidus
+    unicode,   // for four bytes after \u (reverse solidus + u)
+    utf16_i1,  // 1st char after UTF-16 High-Surrogate (reverse solidus)
+    utf16_i2,  // 2nd char after UTF-16 High-Surrogate (u)
+    utf16_ls   // UTF-16 Low-Surrogate for for four bytes after utf16_ls
+} unescape_json_string_state;
+
+static int u8_escape_codepoint(long codepoint, char **target)
+{
+    int len = 0;
+    char *p = *target;
+
+    if (codepoint <= 0) {
+        // Not writing a null byte.
+        return 0;
+    }
+    else if (codepoint < 0x80L) {
+        p[len++] = (char) codepoint;
+    }
+    else if (codepoint < 0x800l) {
+        p[len++] = (char) (0xC0l | codepoint >> 6 & 0x1Fl);
+        p[len++] = (char) (0x80l | codepoint & 0x3Fl);
+    }
+    else if (codepoint < 0x10000l) {
+        p[len++] = (char) (0xE0l | codepoint >> 12 & 0xFl);
+        p[len++] = (char) (0x80l | codepoint >> 6 & 0x3Fl);
+        p[len++] = (char) (0x80l | codepoint & 0x3Fl);
+    }
+    else if (codepoint < 0x110000l) {
+        p[len++] = (char) (0xF0l | codepoint >> 18 & 0x7l);
+        p[len++] = (char) (0x80l | codepoint >> 12 & 0x3Fl);
+        p[len++] = (char) (0x80l | codepoint >> 6 & 0x3Fl);
+        p[len++] = (char) (0x80l | codepoint & 0x3Fl);
+    }
+    else {
+        // That 's not unicode.
+        return 0;
+    }
+
+    return len;
+}
 
 /*
- * Unescapes a JSON string value. See http://www.ietf.org/rfc/rfc4627.txt
+ * Unescapes a UTF-8 encoded JSON string value.
+ * See http://www.ietf.org/rfc/rfc4627.txt
  */
 static int u8_unescape_json_string(char *buf, int buf_len, char **unesc_buf)
 {
     int unesc_len = 0;
+    int i;
+    char ch;
     char *p = *unesc_buf;
+    char *pt;
 
     char uxxxx[] = "xxxx"; // 4HEXDIG buffer for unicode sequences
-    int uxxxxOffset; // current offset in uxxxx
-    int long unicodePoint;
+    int uxxxx_offset;      // current offset in uxxxx
+    long u1;               // UTF-16 Low-Surrogate
+    long u2;               // UTF-16 High-Surrogate
+    long codepoint;        // current Unicode code point
+
     unescape_json_string_state state = txt;
 
-    for (int i = 0; i < buf_len; i++) {
-        char ch = buf[i];
+    for (i = 0; i < buf_len; i++) {
+        ch = buf[i];
         if (state == txt) {
             if (ch == '\\') {
                 state = escaped;
-            } else {
+            }
+            else {
                 p[unesc_len++] = ch;
             }
-        } else if (state == escaped) {
+        }
+        else if (state == escaped) {
             if (ch == 'u') {
+                uxxxx_offset = 0;
                 state = unicode;
-                uxxxxOffset = 0;
-            } else {
+            }
+            else {
                 switch(ch) {
                     case 'n': p[unesc_len++] = '\n'; break; // line feed
                     case 't': p[unesc_len++] = '\t'; break; // tab
@@ -58,25 +109,70 @@ static int u8_unescape_json_string(char *buf, int buf_len, char **unesc_buf)
                 }
                 state = txt;
             }
-        } else if (state == unicode) {
-            uxxxx[uxxxxOffset++] = ch;
-            if (uxxxxOffset == 4) {
-                unicodePoint = strtol(uxxxx, NULL, 16);
-                if (unicodePoint <= 0) {
-                    // NOP
-                } else if (unicodePoint < 0x80) {
-                    p[unesc_len++] = (char) unicodePoint;
-                } else if (unicodePoint < 0x800) {
-                    p[unesc_len++] = (char) (0xC0 + unicodePoint / 0x40);
-                    p[unesc_len++] = (char) (0x80 + unicodePoint % 0x40);
-                } else {
-                    p[unesc_len++] = (char) (0xE0 + unicodePoint / 0x1000);
-                    p[unesc_len++] = (char) (0x80 + unicodePoint / 0x40 % 0x40);
-                    p[unesc_len++] = (char) (0x80 + unicodePoint % 0x40);
+        }
+        else if (state == unicode) {
+            uxxxx[uxxxx_offset++] = ch;
+            if (uxxxx_offset == 4) {
+                codepoint = strtol(uxxxx, NULL, 16);
+                // U' = yyyyyyyyyyxxxxxxxxxx
+                // W1 = 110110yyyyyyyyyy
+                if ((codepoint & 0xFC00l) == 0xD800l) {
+                    // it is a UTF-16 Low-Surrogate
+                    u1 = codepoint;
+                    state = utf16_i1;
+                }
+                else {
+                    // Basic Multilingual Plane
+                    pt = &p[unesc_len];
+                    unesc_len += u8_escape_codepoint(codepoint, &pt);
+                    state = txt;
+                }
+            }
+        }
+        else if (state == utf16_i1) {
+            if (ch == '\\') {
+                state = utf16_i2;
+            }
+            else {
+                p[unesc_len++] = ch;
+                state = txt;
+            }
+        }
+        else if (state == utf16_i2) {
+            if (ch == 'u') {
+                uxxxx_offset = 0;
+                state = utf16_ls;
+            }
+            else {
+                switch(ch) {
+                    case 'n': p[unesc_len++] = '\n'; break; // line feed
+                    case 't': p[unesc_len++] = '\t'; break; // tab
+                    case 'r': p[unesc_len++] = '\r'; break; // carriage return
+                    case 'b': p[unesc_len++] = '\b'; break; // backspace
+                    case 'f': p[unesc_len++] = '\f'; break; // form feed
+                    default: p[unesc_len++] = ch; break; // anything else
                 }
                 state = txt;
             }
-        } else {
+        }
+        else if (state == utf16_ls) {
+            uxxxx[uxxxx_offset++] = ch;
+            if (uxxxx_offset == 4) {
+                codepoint = strtol(uxxxx, NULL, 16);
+                // U' = yyyyyyyyyyxxxxxxxxxx
+                // W2 = 110111xxxxxxxxxx
+                if ((codepoint & 0xFC00l) == 0xDC00l) {
+                    // it is a UTF-16 High-Surrogate
+                    u2 = codepoint;
+                    codepoint = ((u1 & 0x3FFl) << 10 | u2 & 0x3FFl) + 0x10000l;
+                    printf("codepoint: %lx\n", codepoint);
+                }
+                pt = &p[unesc_len];
+                unesc_len += u8_escape_codepoint(codepoint, &pt);
+                state = txt;
+            }
+        }
+        else {
             return -1; // panic: unknown state
         }
     }
@@ -108,7 +204,6 @@ int main(int argc, char *argv[])
     output_len = u8_unescape_json_string(input, input_len, &output);
 
     printf("Output:\n-------\n%s\n\n", output);
-
 
     return 0;
 }
