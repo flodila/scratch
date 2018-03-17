@@ -66,6 +66,11 @@ static int u8_escape_codepoint(long codepoint, char **target)
 /*
  * Unescapes a UTF-8 encoded JSON string value.
  * See http://www.ietf.org/rfc/rfc4627.txt
+ * The input string (buf) is expected to be UTF-8 encoded.
+ * So will be the output (unesc_buf).
+ * The number of chars written to the unesc_buf is at most buf_len and will be
+ * returned. So, you'll be fine to allocate buf_len + 1 (trailing zero) chars
+ * for unesc_buf.
  */
 static int u8_unescape_json_string(char *buf, int buf_len, char **unesc_buf)
 {
